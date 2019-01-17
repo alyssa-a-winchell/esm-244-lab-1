@@ -1,0 +1,127 @@
+---
+title: "Lab1"
+author: "Alyssa Winchell"
+date: "January 10, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Objectives:
+- basic review (data wrangkin)
+-intro to spatial data in R with sf
+-intro to shiny apps
+
+```{r, include=FALSE}
+
+library(tidyverse)
+library(sf)
+library(leaflet)
+library(tmap)
+
+```
+
+
+2. Review: reading, wranglin, and visualizing data
+
+a. Read in the data
+
+```{r}
+
+wine <- read_csv("wine_data.csv")
+
+```
+
+b. Wrangling
+
+```{r}
+
+wine_new<- wine %>% 
+  select(country, province, winery, region_1, points, price) %>%  #select, columns; filter, row. can also use to pick desired ordering
+  rename(state = province) %>% 
+  filter(state == "California" | state == "Oregon" | state == "Washington") %>% 
+  mutate(ppd = points/price) %>%  #to add new column while existing columns remain in this case
+  arrange(-ppd) #by decreasing value
+
+```
+
+c. Use group_by and summarize() to find summary stats by group
+
+```{r}
+
+wine_summary <- wine_new %>% 
+  group_by(state) %>% 
+  summarize(
+    mean_ppd = max(ppd, na.rm = TRUE), #MISSED WHAT THIS MEANS, FIND OUT, also whyyy unexpected symbol
+    max_ppd = max(ppd, na.rm = TRUE))
+
+
+```
+
+d. A few gg-graphics
+
+```{r}
+
+wine_hists <- ggplot(wine_new, aes(x = ppd)) +
+  geom_histogram(aes(fill = state)) +
+  facet_wrap(~state, scales = "free") #separates groups into ind histos, free allows different scales
+
+wine_hists
+
+```
+
+new graph: scatterplot of price vs points, with color determined by state, adding a linear model trendline on top of it
+
+```{r}
+
+wine_points <- ggplot(wine_new, aes(x = price, y = points)) +
+  geom_point(aes(color = state), alpha = 0.1) + #aes treats things like variables
+  geom_smooth(color = "black", method = "lm", size = 0.4, se = FALSE) +
+  scale_color_manual(values = c("royalblue", "mediumorchid1", "orange")) + # c means combination of
+  facet_wrap(~state) +
+  theme_light()
+
+wine_points
+
+```
+
+2. California countries (spatual data) using sf
+
+```{r}
+
+ca_counties <- st_read(ds = ".", layer = "CA_Counties_TIGER2016") #will become eventually spatio-temp data
+
+ca_land <- ca_counties %>% 
+  select(NAME, ALAND)
+
+ca_pop_inc <- read_csv("ca_pop_inc.csv") %>% 
+  rename(NAME = COUNTY)
+
+ca_df <- full_join(ca_land, ca_pop_inc) %>% 
+  select(NAME, MedFamilyIncome)
+
+#plot(ca_counties)
+
+```
+
+
+d. Use geom_sf to make a map in ggplot
+
+```{r}
+
+ca_income <- ggplot(ca_df) +
+  geom_sf(aes(fill = MedFamilyIncome))
+
+ca_income
+
+ca_df_transform <- st_transform(ca_df, crs = 4326)
+
+leaflet(ca_df_transform) %>% 
+  addTiles() %>% 
+  addPolygons()
+
+```
+
